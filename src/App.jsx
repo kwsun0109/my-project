@@ -64,14 +64,16 @@ function App() {
   
   const [totalDistance, setTotalDistance] = useState(0);
 
-  // ⏱️ 시간 측정 상태 (로컬 스토리지 연동으로 핸드폰이 꺼져도 정확히 측정)
+  // 패널 열림/닫힘 상태
+  const [isOpen, setIsOpen] = useState(true);
+
+  // ⏱️ 시간 측정 상태
   const [elapsedTime, setElapsedTime] = useState(() => {
     const savedElapsed = localStorage.getItem('my_elapsed_time');
     const savedStartTime = localStorage.getItem('my_start_time');
     const savedIsTracking = localStorage.getItem('is_tracking') === 'true';
 
     if (savedIsTracking && savedStartTime) {
-      // 앱이 꺼져 있던 시간까지 포함해서 경과 시간 계산
       const extraTime = Math.floor((Date.now() - parseInt(savedStartTime, 10)) / 1000);
       return (savedElapsed ? parseInt(savedElapsed, 10) : 0) + extraTime;
     }
@@ -99,11 +101,10 @@ function App() {
     }
   }, [altitude]);
 
-  // ⏱️ 시간 흐름 타이머 (Date.now 기반으로 백그라운드/절전 모드에서도 정확함)
+  // ⏱️ 시간 흐름 타이머
   useEffect(() => {
     let timer;
     if (isTracking) {
-      // 추적이 시작될 때의 기준 시간 설정
       const trackingStartRealTime = Date.now();
       const baseElapsedTime = elapsedTime;
 
@@ -137,7 +138,6 @@ function App() {
         
         setCenter({ lat, lng });
         
-        // 고도가 유효할 때만 업데이트하고, null이면 직전 고도 유지
         if (alt !== null && !isNaN(alt)) {
           setAltitude(alt);
         }
@@ -220,52 +220,73 @@ function App() {
         transform: 'translateX(-50%)', 
         zIndex: 1000, 
         background: 'white', 
-        padding: '12px 15px', 
+        padding: '10px 15px', 
         borderRadius: '10px', 
         boxShadow: '0 4px 10px rgba(0,0,0,0.2)',
         textAlign: 'center',
         width: '90%',
         maxWidth: '380px'
       }}>
-        <h3 style={{ margin: '0 0 5px 0' }}>나만의 발자취 기록소</h3>
-        <p style={{ fontSize: '11px', color: '#555', margin: '0 0 6px 0' }}>
-          위치·고도·거리·시간 측정 및 메모 남기기 기능 포함
-        </p>
-        
-        {errorMsg && <p style={{ fontSize: '12px', color: 'red', margin: '5px 0' }}>{errorMsg}</p>}
-        
-        <div style={{ background: '#f8f9fa', padding: '8px', borderRadius: '6px', margin: '6px 0', fontSize: '13px', textAlign: 'left' }}>
-          <div>📍 상태: <b>{isTracking ? '추적 중...' : '대기 중'}</b></div>
-          <div>📏 총 이동 거리: <b style={{ color: '#2196F3' }}>{totalDistance.toFixed(2)} km</b></div>
-          <div>⏱️ 소요 시간: <b>{formatTime(elapsedTime)}</b></div>
-          <div>⛰️ 현재 고도: <span style={{ color: '#4CAF50' }}>{altitude !== null ? `${altitude.toFixed(1)} m` : '대기 중'}</span></div>
-          <div>📌 총 포인트: <b>{path.length}개</b></div>
-        </div>
+        <button 
+          onClick={() => setIsOpen(!isOpen)}
+          style={{ 
+            width: '100%', 
+            padding: '6px', 
+            fontSize: '13px', 
+            backgroundColor: '#e0e0e0', 
+            border: 'none', 
+            borderRadius: '5px', 
+            cursor: 'pointer',
+            fontWeight: 'bold',
+            marginBottom: isOpen ? '8px' : '0'
+          }}
+        >
+          {isOpen ? '▲ 기록소 숨기기' : '▼ 나만의 발자취 기록소 열기'}
+        </button>
 
-        <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', marginTop: '8px' }}>
-          {!isTracking ? (
-            <button 
-              onClick={startTracking}
-              style={{ flex: 1, padding: '8px', fontSize: '14px', backgroundColor: '#4CAF50', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}
-            >
-              추적 시작
-            </button>
-          ) : (
-            <button 
-              onClick={pauseTracking}
-              style={{ flex: 1, padding: '8px', fontSize: '14px', backgroundColor: '#ff9800', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}
-            >
-              일시정지
-            </button>
-          )}
+        {isOpen && (
+          <>
+            <h3 style={{ margin: '0 0 5px 0' }}>퇴근길 발자취 기록소</h3>
+            <p style={{ fontSize: '11px', color: '#555', margin: '0 0 6px 0' }}>
+              위치·고도·거리·시간 측정 및 메모 남기기 기능 포함
+            </p>
+            
+            {errorMsg && <p style={{ fontSize: '12px', color: 'red', margin: '5px 0' }}>{errorMsg}</p>}
+            
+            <div style={{ background: '#f8f9fa', padding: '8px', borderRadius: '6px', margin: '6px 0', fontSize: '13px', textAlign: 'left' }}>
+              <div>📍 상태: <b>{isTracking ? '추적 중...' : '대기 중'}</b></div>
+              <div>📏 총 이동 거리: <b style={{ color: '#2196F3' }}>{totalDistance.toFixed(2)} km</b></div>
+              <div>⏱️ 소요 시간: <b>{formatTime(elapsedTime)}</b></div>
+              <div>⛰️ 현재 고도: <span style={{ color: '#4CAF50' }}>{altitude !== null ? `${altitude.toFixed(1)} m` : '대기 중'}</span></div>
+              <div>📌 총 포인트: <b>{path.length}개</b></div>
+            </div>
 
-          <button 
-            onClick={handleClearPath}
-            style={{ padding: '8px 12px', fontSize: '14px', backgroundColor: '#f44336', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}
-          >
-            전체 초기화
-          </button>
-        </div>
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', marginTop: '8px' }}>
+              {!isTracking ? (
+                <button 
+                  onClick={startTracking}
+                  style={{ flex: 1, padding: '8px', fontSize: '14px', backgroundColor: '#4CAF50', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}
+                >
+                  추적 시작
+                </button>
+              ) : (
+                <button 
+                  onClick={pauseTracking}
+                  style={{ flex: 1, padding: '8px', fontSize: '14px', backgroundColor: '#ff9800', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}
+                >
+                  일시정지
+                </button>
+              )}
+
+              <button 
+                onClick={handleClearPath}
+                style={{ padding: '8px 12px', fontSize: '14px', backgroundColor: '#f44336', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}
+              >
+                전체 초기화
+              </button>
+            </div>
+          </>
+        )}
       </div>
 
       {/* 지도 영역 */}
@@ -278,32 +299,25 @@ function App() {
         
         <MapRecenter center={center} />
 
-        {/* 이동 경로 선 */}
+        {/* 이동 경로 선 (전체 경로를 선으로 부드럽게 연결) */}
         <Polyline positions={path} color="#2196F3" weight={5} opacity={0.8} />
         
-        {/* 마커 및 메모 팝업 */}
-        {path.map((pos, index) => (
-          <Marker key={index} position={pos}>
+        {/* 📌 출발지(첫 번째 포인트)와 도착지(마지막 포인트)에만 마커 표시 */}
+        {path.length > 0 && (
+          <Marker position={path[0]}>
             <Popup>
-              <div style={{ minWidth: '150px' }}>
-                <b>포인트 #{index + 1}</b><br/>
-                <span style={{ fontSize: '11px', color: '#666' }}>
-                  {pos[0].toFixed(4)}, {pos[1].toFixed(4)}
-                </span>
-                <div style={{ marginTop: '6px' }}>
-                  <label style={{ fontSize: '12px', fontWeight: 'bold' }}>장소 메모:</label>
-                  <input 
-                    type="text" 
-                    value={memos[index] || ''} 
-                    onChange={(e) => handleMemoChange(index, e.target.value)}
-                    placeholder="여기에 메모 입력..."
-                    style={{ width: '100%', marginTop: '4px', padding: '4px', boxSizing: 'border-box' }}
-                  />
-                </div>
-              </div>
+              <div><b>출발지</b><br/><span style={{ fontSize: '11px', color: '#666' }}>{path[0][0].toFixed(4)}, {path[0][1].toFixed(4)}</span></div>
             </Popup>
           </Marker>
-        ))}
+        )}
+
+        {path.length > 1 && (
+          <Marker position={path[path.length - 1]}>
+            <Popup>
+              <div><b>현재 위치 (도착지)</b><br/><span style={{ fontSize: '11px', color: '#666' }}>{path[path.length - 1][0].toFixed(4)}, {path[path.length - 1][1].toFixed(4)}</span></div>
+            </Popup>
+          </Marker>
+        )}
         
       </MapContainer>
     </div>
