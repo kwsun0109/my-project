@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -63,9 +63,10 @@ function App() {
   });
   
   const [totalDistance, setTotalDistance] = useState(0);
-
-  // 패널 열림/닫힘 상태
   const [isOpen, setIsOpen] = useState(true);
+
+  // 🔋 화면 꺼짐 방지(WakeLock) 객체를 담아둘 Ref
+  const wakeLockRef = useRef(null);
 
   // ⏱️ 시간 측정 상태
   const [elapsedTime, setElapsedTime] = useState(() => {
@@ -117,12 +118,40 @@ function App() {
     return () => clearInterval(timer);
   }, [isTracking]);
 
+  // 🔋 화면 안 꺼짐 잠금 요청 (아이폰 슬립모드 방어용)
+  const requestWakeLock = async () => {
+    try {
+      if ('wakeLock' in navigator) {
+        wakeLockRef.current = await navigator.wakeLock.request('screen');
+        console.log('Wake Lock 활성화 성공 (슬립모드 위치 유실 방지)');
+      }
+    } catch (err) {
+      console.error(`${err.name}, ${err.message}`);
+    }
+  };
+
+  // 🔋 잠금 해제
+  const releaseWakeLock = async () => {
+    if (wakeLockRef.current !== null) {
+      try {
+        await wakeLockRef.current.release();
+        wakeLockRef.current = null;
+        console.log('Wake Lock 해제됨');
+      } catch (err) {
+        console.error(`${err.name}, ${err.message}`);
+      }
+    }
+  };
+
   // GPS 실시간 추적 시작
-  const startTracking = () => {
+  const startTracking = async () => {
     if (!navigator.geolocation) {
       setErrorMsg('이 브라우저는 위치 정보를 지원하지 않습니다.');
       return;
     }
+
+    // 슬립모드 방지를 위한 WakeLock 실행
+    await requestWakeLock();
 
     const now = Date.now();
     setIsTracking(true);
@@ -149,7 +178,8 @@ function App() {
           const lastPoint = prevPath[prevPath.length - 1];
           const distMeters = calculateDistanceMeters(lastPoint[0], lastPoint[1], lat, lng);
           
-          if (distMeters >= 3) {
+          // 3미터 이상 움직였고, 1km 이상 터무니없이 튄 좌표(오작동)는 필터링하여 제외
+          if (distMeters >= 3 && distMeters < 1000) {
             return [...prevPath, [lat, lng]];
           }
           return prevPath;
@@ -160,15 +190,19 @@ function App() {
         setErrorMsg('위치 정보를 가져올 수 없습니다. 권한을 확인해주세요.');
         setIsTracking(false);
         localStorage.setItem('is_tracking', 'false');
+        releaseWakeLock();
       },
       {
         enableHighAccuracy: true,
         maximumAge: 0,
-        timeout: 5000,
+        timeout: 10000,
       }
     );
 
-    return () => navigator.geolocation.clearWatch(watchId);
+    return () => {
+      navigator.geolocation.clearWatch(watchId);
+      releaseWakeLock();
+    };
   };
 
   // 일시정지 버튼
@@ -176,6 +210,7 @@ function App() {
     setIsTracking(false);
     localStorage.setItem('is_tracking', 'false');
     localStorage.setItem('my_elapsed_time', elapsedTime.toString());
+    releaseWakeLock(); // 일시정지 시 화면 잠금 해제
   };
 
   // 전체 초기화
@@ -186,6 +221,7 @@ function App() {
     setTotalDistance(0);
     setElapsedTime(0);
     setIsTracking(false);
+    releaseWakeLock();
     
     localStorage.removeItem('my_path');
     localStorage.removeItem('my_memos');
@@ -193,10 +229,6 @@ function App() {
     localStorage.removeItem('my_start_time');
     localStorage.removeItem('my_elapsed_time');
     localStorage.removeItem('my_altitude');
-  };
-
-  const handleMemoChange = (index, text) => {
-    setMemos((prev) => ({ ...prev, [index]: text }));
   };
 
   const formatTime = (seconds) => {
@@ -254,7 +286,7 @@ function App() {
             {errorMsg && <p style={{ fontSize: '12px', color: 'red', margin: '5px 0' }}>{errorMsg}</p>}
             
             <div style={{ background: '#f8f9fa', padding: '8px', borderRadius: '6px', margin: '6px 0', fontSize: '13px', textAlign: 'left' }}>
-              <div>📍 상태: <b>{isTracking ? '추적 중...' : '대기 중'}</b></div>
+              <div>📍 상태: <b>{isTracking ? '추적 중 (슬립 방지 활성)' : '대기 중'}</b></div>
               <div>📏 총 이동 거리: <b style={{ color: '#2196F3' }}>{totalDistance.toFixed(2)} km</b></div>
               <div>⏱️ 소요 시간: <b>{formatTime(elapsedTime)}</b></div>
               <div>⛰️ 현재 고도: <span style={{ color: '#4CAF50' }}>{altitude !== null ? `${altitude.toFixed(1)} m` : '대기 중'}</span></div>
@@ -299,10 +331,9 @@ function App() {
         
         <MapRecenter center={center} />
 
-        {/* 이동 경로 선 (전체 경로를 선으로 부드럽게 연결) */}
+        {/* 이동 경로 선 */}
         <Polyline positions={path} color="#2196F3" weight={5} opacity={0.8} />
         
-        {/* 📌 출발지(첫 번째 포인트)와 도착지(마지막 포인트)에만 마커 표시 */}
         {path.length > 0 && (
           <Marker position={path[0]}>
             <Popup>
