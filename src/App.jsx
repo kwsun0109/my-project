@@ -72,6 +72,18 @@ function App() {
     return saved ? parseFloat(saved) : null;
   });
 
+  // 최고 고도 상태 추가
+  const [maxAltitude, setMaxAltitude] = useState(() => {
+    const saved = localStorage.getItem('my_max_altitude');
+    return saved ? parseFloat(saved) : null;
+  });
+
+  // 최저 고도 상태 추가
+  const [minAltitude, setMinAltitude] = useState(() => {
+    const saved = localStorage.getItem('my_min_altitude');
+    return saved ? parseFloat(saved) : null;
+  });
+
   const [totalDistance, setTotalDistance] = useState(0);
   const [isOpen, setIsOpen] = useState(true);
 
@@ -123,7 +135,13 @@ function App() {
     if (altitude !== null) {
       localStorage.setItem('my_altitude', altitude);
     }
-  }, [altitude]);
+    if (maxAltitude !== null) {
+      localStorage.setItem('my_max_altitude', maxAltitude);
+    }
+    if (minAltitude !== null) {
+      localStorage.setItem('my_min_altitude', minAltitude);
+    }
+  }, [altitude, maxAltitude, minAltitude]);
 
   useEffect(() => {
     localStorage.setItem("my_history", JSON.stringify(history));
@@ -225,6 +243,9 @@ function App() {
 
         if (alt !== null && !isNaN(alt)) {
           setAltitude(alt);
+          // 최고 고도 및 최저 고도 갱신 로직
+          setMaxAltitude((prevMax) => (prevMax === null || alt > prevMax ? alt : prevMax));
+          setMinAltitude((prevMin) => (prevMin === null || alt < prevMin ? alt : prevMin));
         }
 
         setPath((prevPath) => {
@@ -247,12 +268,10 @@ function App() {
           }
 
           // [방어 필터 2] 속도/점프 검증 (비정상적으로 튄 좌표 차단)
-          // 직전 유효 좌표가 있다면, 이동 시간 대비 거리를 계산하여 순간이동(초속 40m/s 이상, 약 144km/h 초과) 여부 확인
           if (lastValidPositionRef.current) {
             const timeDiffSec = (timestamp - lastValidPositionRef.current.time) / 1000;
             if (timeDiffSec > 0) {
               const speedMps = distMeters / timeDiffSec; // 초당 이동 미터
-              // 사람이 이동하는 속도를 아득히 넘어서는 순간 휐 현상(예: 40 m/s 이상으로 갑자기 튐) 차단
               if (speedMps > 40) {
                 console.log(`🚀 이상 좌표 휐 현상 감지 및 차단 (속도: ${speedMps.toFixed(1)} m/s)`);
                 return prevPath;
@@ -304,6 +323,8 @@ function App() {
 
     setPath([]);
     setAltitude(null);
+    setMaxAltitude(null);
+    setMinAltitude(null);
     setTotalDistance(0);
     setElapsedTime(0);
     setIsTracking(false);
@@ -317,6 +338,8 @@ function App() {
     localStorage.removeItem('my_start_time');
     localStorage.removeItem('my_elapsed_time');
     localStorage.removeItem('my_altitude');
+    localStorage.removeItem('my_max_altitude');
+    localStorage.removeItem('my_min_altitude');
   };
 
   // 현재 경로 기록을 히스토리에 저장하는 함수
@@ -334,6 +357,8 @@ function App() {
       totalDistance,
       elapsedTime,
       altitude,
+      maxAltitude,
+      minAltitude,
     };
 
     setHistory([newRecord, ...history]);
@@ -351,7 +376,9 @@ function App() {
     setPath(record.path);
     setTotalDistance(record.totalDistance);
     setElapsedTime(record.elapsedTime);
-    setAltitude(record.altitude);
+    setAltitude(record.altitude !== undefined ? record.altitude : null);
+    setMaxAltitude(record.maxAltitude !== undefined ? record.maxAltitude : null);
+    setMinAltitude(record.minAltitude !== undefined ? record.minAltitude : null);
     if (record.path.length > 0) {
       setCenter({ lat: record.path[0][0], lng: record.path[0][1] });
     }
@@ -449,6 +476,10 @@ function App() {
               </div>
               <div>
                 ⛰️ 현재 고도: <span style={{ color: "#4CAF50" }}>{altitude !== null ? `${altitude.toFixed(1)} m` : "대기 중"}</span>
+              </div>
+              <div style={{ fontSize: "12px", color: "#666", paddingLeft: "15px", marginTop: "2px" }}>
+                - 최고: <span style={{ color: "#e91e63", fontWeight: "bold" }}>{maxAltitude !== null ? `${maxAltitude.toFixed(1)} m` : "-"}</span> / 
+                최저: <span style={{ color: "#3f51b5", fontWeight: "bold" }}>{minAltitude !== null ? `${minAltitude.toFixed(1)} m` : "-"}</span>
               </div>
               <div>
                 📌 총 포인트: <b>{path.length}개</b>
